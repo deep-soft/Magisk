@@ -34,7 +34,7 @@ on:
       patch_ondk: 
           description: patch ondk url
           type: boolean
-          default: false
+          default: true
           required: true
       build_debug: 
           description: build debug
@@ -67,6 +67,14 @@ jobs:
         with:
           submodules: "recursive"
           fetch-depth: 0
+
+      - name: get version code
+        shell: bash
+        run: |
+          _version_code_=grep "magisk.versionCode" gradle.properties | awk -F"=" '{print $2}'
+          if [[ "$_version_code_" != "" ]]; then
+            echo "PROG_VERSION_CODE=$_version_code_" >> $GITHUB_ENV
+          fi
 
       - name: patch ondk url in build.py
         if: ${{ inputs.patch_ondk }}
@@ -124,7 +132,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p signed-apk;
-          cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
+          if [[ "${{ env.PROG_VERSION_CODE }}" == "" ]]; then
+            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
+          else
+            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-v${{ env.PROG_VERSION_CODE }}.apk
+          fi;
 
       - uses: deep-soft/sign-android-release@master
         name: Sign app APK
