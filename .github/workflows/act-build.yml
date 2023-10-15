@@ -9,6 +9,12 @@ env:
   PROG_NAME:     "Magisk"
   PROG_VERSION:  "v26.3.1"
   VERSION:       "26.3.1"
+  #signing keys env variable checks
+  ANDROID_SIGNING_KEY: '${{ secrets.ANDROID_SIGNING_KEY }}'
+  #  signingKeyBase64: '${{ secrets.ANDROID_SIGNING_KEY }}'
+  #  alias:            '${{ secrets.ANDROID_ALIAS }}'
+  #  keyStorePassword: '${{ secrets.ANDROID_KEY_STORE_PASSWORD }}'
+  #  keyPassword:      '${{ secrets.ANDROID_KEY_PASSWORD }}'
 
 on:
 #  push:
@@ -142,7 +148,7 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./out/*.apk
-            ./signed-apk/*.apk
+            ${{steps.sign-magisk.outputs.signedReleaseFile}}
 
       - name: Build debug
         if: ${{ inputs.build_debug }}
