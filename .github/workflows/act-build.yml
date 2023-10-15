@@ -124,7 +124,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p signed-apk;
-          cp ./out/app-release.apk ./signed-apk/
+          cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
 
       - uses: deep-soft/sign-android-release@master
         name: Sign app APK
