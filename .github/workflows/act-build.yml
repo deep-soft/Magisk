@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           grep "/ondk/" build.py
-          sed -ibak "s!github.com/topjohnwu/ondk/releases/!github.com/deep-soft/ondk/releases/" build.py
+          sed -ibak "s!github.com\/topjohnwu\/ondk\/releases\/!github.com\/deep-soft\/ondk\/releases\/" build.py
           grep "/ondk/" build.py
 
       - name: Set up JDK 17
