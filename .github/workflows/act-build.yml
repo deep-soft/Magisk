@@ -74,12 +74,21 @@ jobs:
           _version_code_=$(grep "magisk.versionCode" gradle.properties | awk -F"=" '{print $2}')
           if [[ "$_version_code_" != "" ]]; then
             echo "PROG_VERSION_CODE=$_version_code_" >> $GITHUB_ENV
+            _sver2_=${_version_code_:${#_version_code_}-2:2}
             _ver_sver_=${_version_code_:0:${#_version_code_}-2}
             _sver_=${_ver_sver_:${#_ver_sver_}-1:1}
             _ver_=${_ver_sver_:0:-1}
-            echo "ver =$_ver_"
-            echo "sver=$_sver_"
+            _ver_sver_sver2_=$_ver_.$_sver_.$_sver2_
+
+            echo "VERSION=$_ver_sver_sver2_" >> $GITHUB_ENV
+            echo "PROG_VERSION=v$_ver_sver_sver2_" >> $GITHUB_ENV
           fi
+
+      - name: print version, program version
+        shell: bash
+        run: |
+            echo "VERSION=${{ env.VERSION }}"
+            echo "PROG_VERSION=${{ env.PROG_VERSION }}"
 
       - name: patch ondk url in build.py
         if: ${{ inputs.patch_ondk }}
@@ -137,11 +146,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p signed-apk;
-          if [[ "${{ env.PROG_VERSION_CODE }}" == "" ]]; then
-            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
-          else
-            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-v${{ env.PROG_VERSION_CODE }}.apk
-          fi;
+          cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
+#          if [[ "${{ env.PROG_VERSION_CODE }}" == "" ]]; then
+#            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}.apk
+#          else
+#            cp ./out/app-release.apk ./signed-apk/${{ env.PROG_NAME }}-v${{ env.PROG_VERSION_CODE }}.apk
+#          fi;
 
       - uses: deep-soft/sign-android-release@master
         name: Sign app APK
