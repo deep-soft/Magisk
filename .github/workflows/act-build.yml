@@ -71,7 +71,7 @@ jobs:
       - name: get version code
         shell: bash
         run: |
-          _version_code_=grep "magisk.versionCode" gradle.properties | awk -F"=" '{print $2}'
+          _version_code_=$(grep "magisk.versionCode" gradle.properties | awk -F"=" '{print $2}')
           if [[ "$_version_code_" != "" ]]; then
             echo "PROG_VERSION_CODE=$_version_code_" >> $GITHUB_ENV
           fi
