@@ -117,7 +117,7 @@ jobs:
       - name: Copy apk to signed-apk
         shell: bash
         run: |
-          mkdir -p signed-apk; pushd signed-apk
+          mkdir -p signed-apk;
           cp ./out/app-release.apk ./signed-apk/
 
       - uses: deep-soft/sign-android-release@master
