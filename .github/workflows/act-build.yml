@@ -1,4 +1,4 @@
-#2023-10-15 09:30
+#2023-10-15 20:00
 name: act - Magisk Build - release
 
 env:
@@ -84,11 +84,14 @@ jobs:
             echo "PROG_VERSION=v$_ver_sver_sver2_" >> $GITHUB_ENV
           fi
 
-      - name: print version, program version
+      - name: print VERSION, set TAG_NAME
         shell: bash
         run: |
             echo "VERSION=${{ env.VERSION }}"
             echo "PROG_VERSION=${{ env.PROG_VERSION }}"
+            if [[ "${{ env.PROG_VERSION }}" != "" ]]; then
+              echo "TAG_NAME=${{ env.TAG_NAME }}-${{ env.PROG_VERSION }}" >> $GITHUB_ENV
+            fi
 
       - name: patch ondk url in build.py
         if: ${{ inputs.patch_ondk }}
