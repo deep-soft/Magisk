@@ -62,6 +62,8 @@ if shutil.which("sccache") is not None:
     os.environ["RUSTC_WRAPPER"] = "sccache"
     os.environ["NDK_CCACHE"] = "sccache"
     os.environ["CARGO_INCREMENTAL"] = "0"
+if shutil.which("ccache") is not None:
+    os.environ["NDK_CCACHE"] = "ccache"
 
 cpu_count = multiprocessing.cpu_count()
 os_name = platform.system().lower()
@@ -187,15 +189,17 @@ def load_config(args):
 
     # Default values
     config["version"] = commit_hash
+    config["versionCode"] = 1000000
     config["outdir"] = "out"
 
     # Load prop files
     if op.exists(args.config):
         config.update(parse_props(args.config))
 
-    for key, value in parse_props("gradle.properties").items():
-        if key.startswith("magisk."):
-            config[key[7:]] = value
+    if op.exists("gradle.properties"):
+        for key, value in parse_props("gradle.properties").items():
+            if key.startswith("magisk."):
+                config[key[7:]] = value
 
     try:
         config["versionCode"] = int(config["versionCode"])
