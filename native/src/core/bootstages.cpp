@@ -6,13 +6,11 @@
 #include <set>
 #include <string>
 
-#include <magisk.hpp>
+#include <consts.hpp>
 #include <db.hpp>
 #include <base.hpp>
-#include <daemon.hpp>
+#include <core.hpp>
 #include <selinux.hpp>
-
-#include "core.hpp"
 
 using namespace std;
 
@@ -416,6 +414,8 @@ static void boot_complete() {
     // Ensure manager exists
     check_pkg_refresh();
     get_manager(0, nullptr, true);
+
+    reset_zygisk(true);
 }
 
 void boot_stage_handler(int client, int code) {

@@ -3,14 +3,12 @@
 #include <sys/un.h>
 #include <sys/mount.h>
 
-#include <magisk.hpp>
+#include <consts.hpp>
 #include <base.hpp>
-#include <daemon.hpp>
+#include <core.hpp>
 #include <selinux.hpp>
 #include <db.hpp>
 #include <flags.h>
-
-#include "core.hpp"
 
 using namespace std;
 
@@ -141,10 +139,11 @@ static void handle_request_async(int client, int code, const sock_cred &cred) {
         su_daemon_handler(client, &cred);
         break;
     case MainRequest::ZYGOTE_RESTART:
-        close(client);
         LOGI("** zygote restarted\n");
         pkg_xml_ino = 0;
         prune_su_access();
+        reset_zygisk(false);
+        close(client);
         break;
     case MainRequest::SQLITE_CMD:
         exec_sql(client);
@@ -158,7 +157,6 @@ static void handle_request_async(int client, int code, const sock_cred &cred) {
         break;
     }
     case MainRequest::ZYGISK:
-    case MainRequest::ZYGISK_PASSTHROUGH:
         zygisk_handler(client, &cred);
         break;
     default:
@@ -181,11 +179,24 @@ static void handle_request_sync(int client, int code) {
     case MainRequest::START_DAEMON:
         rust::get_magiskd().setup_logfile();
         break;
-    case MainRequest::STOP_DAEMON:
+    case MainRequest::STOP_DAEMON: {
+        // Unmount all overlays
         denylist_handler(-1, nullptr);
+
+        // Restore native bridge property
+        auto nb = get_prop(NBPROP);
+        auto len = sizeof(ZYGISKLDR) - 1;
+        if (nb == ZYGISKLDR) {
+            set_prop(NBPROP, "0");
+        } else if (nb.size() > len) {
+            set_prop(NBPROP, nb.data() + len);
+        }
+
         write_int(client, 0);
+
         // Terminate the daemon!
         exit(0);
+    }
     default:
         __builtin_unreachable();
     }
