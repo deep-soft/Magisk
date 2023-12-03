@@ -84,14 +84,11 @@ jobs:
             echo "PROG_VERSION=v$_ver_sver_sver2_" >> $GITHUB_ENV
           fi
 
-      - name: print VERSION, set TAG_NAME
+      - name: print VERSION
         shell: bash
         run: |
             echo "VERSION=${{ env.VERSION }}"
             echo "PROG_VERSION=${{ env.PROG_VERSION }}"
-            if [[ "${{ env.PROG_VERSION }}" != "" ]]; then
-              echo "TAG_NAME=${{ env.TAG_NAME }}-${{ env.PROG_VERSION }}" >> $GITHUB_ENV
-            fi
 
       - name: patch ondk url in build.py
         if: ${{ inputs.patch_ondk }}
@@ -175,9 +172,18 @@ jobs:
         uses: deep-soft/action-gh-release@v1
         with:
           draft: true
-          tag_name: ${{ env.TAG_NAME }}
+          tag_name: ${{ env.TAG_NAME }}-${{ env.PROG_VERSION }}
           files: |
             ./out/*.apk
+            ${{steps.sign-magisk.outputs.signedReleaseFile}}
+
+      - name: Publish Release
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
             ${{steps.sign-magisk.outputs.signedReleaseFile}}
 
       - name: Build debug
