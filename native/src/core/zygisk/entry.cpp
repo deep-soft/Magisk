@@ -229,9 +229,11 @@ void zygisk_handler(int client, const sock_cred *cred) {
 void reset_zygisk(bool restore) {
     if (!zygisk_enabled) return;
     static atomic_uint zygote_start_count{1};
-    close(zygiskd_sockets[0]);
-    close(zygiskd_sockets[1]);
-    zygiskd_sockets[0] = zygiskd_sockets[1] = -1;
+    if (!restore) {
+        close(zygiskd_sockets[0]);
+        close(zygiskd_sockets[1]);
+        zygiskd_sockets[0] = zygiskd_sockets[1] = -1;
+    }
     if (restore) {
         zygote_start_count = 1;
     } else if (zygote_start_count.fetch_add(1) > 3) {
@@ -243,8 +245,8 @@ void reset_zygisk(bool restore) {
         if (native_bridge.length() > strlen(ZYGISKLDR)) {
             native_bridge_orig = native_bridge.substr(strlen(ZYGISKLDR));
         }
-        set_prop(NBPROP, native_bridge_orig.data(), true);
+        set_prop(NBPROP, native_bridge_orig.data());
     } else {
-        set_prop(NBPROP, native_bridge.data(), true);
+        set_prop(NBPROP, native_bridge.data());
     }
 }
