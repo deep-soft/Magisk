@@ -75,13 +75,13 @@ jobs:
           fetch-depth: 0
 
 # patch_tmp_ondk_r26_3_0 - begin
-      - name: get version code
+      - name: patch tmp ondk r26.3.0
         if: ${{ inputs.patch_tmp_ondk_r26_3_0 }}
         shell: bash
         run: |
           ondk_ver=$(grep magisk.ondkVersion gradle.properties);
           echo "ondk_ver=$ondk_ver";
-          sed 's!magisk.ondkVersion=r26.3!magisk.ondkVersion=r26.3.0!' gradle.properties;
+          sed -ibak 's!magisk.ondkVersion=r26.3!magisk.ondkVersion=r26.3.0!' gradle.properties;
           ondk_ver=$(grep magisk.ondkVersion gradle.properties);
           echo "ondk_ver=$ondk_ver";
 # patch_tmp_ondk_r26_3_0 - end
