@@ -32,6 +32,11 @@ on:
 #    branches: [master]
   workflow_dispatch:
     inputs:
+      patch_tmp_ondk_r26_3_0:
+          description: temporary patch ondk for r26.3.0
+          type: boolean
+          default: false
+          required: true
       patch_ondk: 
           description: patch ondk url
           type: boolean
@@ -68,6 +73,18 @@ jobs:
         with:
           submodules: "recursive"
           fetch-depth: 0
+
+# patch_tmp_ondk_r26_3_0 - begin
+      - name: get version code
+        if: ${{ inputs.patch_tmp_ondk_r26_3_0 }}
+        shell: bash
+        run: |
+          ondk_ver=$(grep magisk.ondkVersion gradle.properties);
+          echo "ondk_ver=$ondk_ver";
+          sed 's!magisk.ondkVersion=r26.3!magisk.ondkVersion=r26.3.0!' gradle.properties;
+          ondk_ver=$(grep magisk.ondkVersion gradle.properties);
+          echo "ondk_ver=$ondk_ver";
+# patch_tmp_ondk_r26_3_0 - end
 
       - name: get version code
         shell: bash
