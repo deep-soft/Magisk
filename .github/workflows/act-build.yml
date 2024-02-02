@@ -1,4 +1,5 @@
-#2023-10-15 20:00
+# 2024-02-02 12:00
+#
 name: act - Magisk Build - release
 
 env:
@@ -99,18 +100,18 @@ jobs:
           grep "/ondk/" build.py
 
       - name: Set up JDK 17
-        uses: deep-soft/setup-java@v3
+        uses: deep-soft/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Set up Python 3
-        uses: deep-soft/setup-python@v4
+      - name: Set up Python 3 (v5)
+        uses: deep-soft/setup-python@v5
         with:
           python-version: "3.x"
 
       - name: Set up sccache
-        uses: deep-soft/ccache-action@v1.2
+        uses: deep-soft/ccache-action@v1
         with:
           variant: sccache
           key: ${{ runner.os }}-${{ github.sha }}
@@ -118,7 +119,7 @@ jobs:
           max-size: 10000M
 
       - name: Cache Gradle dependencies
-        uses: deep-soft/cache@v3
+        uses: deep-soft/cache@v4
         with:
           path: |
             ~/.gradle/caches
@@ -128,7 +129,7 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Cache build cache
-        uses: deep-soft/cache@v3
+        uses: deep-soft/cache@v4
         with:
           path: |
             ~/.gradle/caches/build-cache-*
@@ -169,7 +170,7 @@ jobs:
 
       - name: Publish Release
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME }}-${{ env.PROG_VERSION }}
@@ -179,7 +180,7 @@ jobs:
 
       - name: Publish Release
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME }}
@@ -197,14 +198,14 @@ jobs:
       # Only upload artifacts built on Linux
       - name: Upload build artifact
         if: runner.os == 'Linux'
-        uses: deep-soft/upload-artifact@v3
+        uses: deep-soft/upload-artifact@v4
         with:
           name: ${{ github.sha }}
           path: out
 
       - name: Upload mapping and native debug symbols
         if: (${{ inputs.run_tests }} && runner.os == 'Linux')
-        uses: deep-soft/upload-artifact@v3
+        uses: deep-soft/upload-artifact@v4
         with:
           name: ${{ github.sha }}-symbols
           path: app/build/outputs
@@ -226,13 +227,13 @@ jobs:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: deep-soft/setup-java@v3
+        uses: deep-soft/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Set up Python 3
-        uses: deep-soft/setup-python@v4
+      - name: Set up Python 3 (v5)
+        uses: deep-soft/setup-python@v5
         with:
           python-version: "3.x"
 
