@@ -1,4 +1,4 @@
-# 2024-02-02 12:00
+# 2024-02-03 08:30
 #
 name: act - Magisk Build - release
 
@@ -17,21 +17,7 @@ env:
   #  keyStorePassword: '${{ secrets.ANDROID_KEY_STORE_PASSWORD }}'
   #  keyPassword:      '${{ secrets.ANDROID_KEY_PASSWORD }}'
 
-  SCCACHE_DIRECT: false
-
 on:
-#  push:
-#    branches: [master]
-#    paths:
-#      - "app/**"
-#      - "native/**"
-#      - "stub/**"
-#      - "buildSrc/**"
-#      - "build.py"
-#      - "gradle.properties"
-#      - ".github/workflows/build.yml"
-#  pull_request:
-#    branches: [master]
   workflow_dispatch:
     inputs:
       patch_ondk: 
@@ -39,33 +25,23 @@ on:
           type: boolean
           default: true
           required: true
-      build_debug: 
-          description: build debug
-          type: boolean
-          default: false
-          required: true
-      symbols: 
-          description: Upload symbols
-          type: boolean
-          default: false
-          required: true
       run_tests: 
           description: Run tests
           type: boolean
           default: false
           required: true
+
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: Build Magisk 
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_DIRECT: false
     strategy:
       fail-fast: false
-      matrix:
-        os: [ubuntu-latest]
-        # os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Check out
-        uses: deep-soft/checkout@v4
+        uses: actions/checkout@v4
         with:
           submodules: "recursive"
           fetch-depth: 0
@@ -100,49 +76,14 @@ jobs:
           sed -ibak "s!github.com\/topjohnwu\/ondk\/releases\/!github.com\/deep-soft\/ondk\/releases\/!" build.py
           grep "/ondk/" build.py
 
-      - name: Set up JDK 17
-        uses: deep-soft/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: Set up Python 3 (v5)
-        uses: deep-soft/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Set up sccache
-        uses: deep-soft/ccache-action@v1
-        with:
-          variant: sccache
-          key: ${{ runner.os }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}
-          max-size: 10000M
-
-      - name: Cache Gradle dependencies
-        uses: deep-soft/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            !~/.gradle/caches/build-cache-*
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
-      - name: Cache build cache
-        uses: deep-soft/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches/build-cache-*
-          key: ${{ runner.os }}-build-cache-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-build-cache-
-
-      - name: Set up NDK
-        run: python build.py -v ndk
+      - name: Setup environment
+        uses: ./.github/actions/setup
 
       - name: Build release
-        run: |
-          python build.py -vr all
+        run: ./build.py -vr all
+
+      - name: Stop gradle daemon
+        run: ./gradlew --stop
 
       - name: Copy apk to signed-apk
         shell: bash
@@ -188,63 +129,52 @@ jobs:
           files: |
             ${{steps.sign-magisk.outputs.signedReleaseFile}}
 
-      - name: Build debug
-        if: ${{ inputs.build_debug }}
-        run: |
-          python build.py -v all
-
-      - name: Stop gradle daemon
-        run: ./gradlew --stop
-
-      # Only upload artifacts built on Linux
       - name: Upload build artifact
-        if: runner.os == 'Linux'
-        uses: deep-soft/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}
           path: out
+          compression-level: 9
 
       - name: Upload mapping and native debug symbols
-        if: (${{ inputs.run_tests }} && runner.os == 'Linux')
-        uses: deep-soft/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}-symbols
           path: app/build/outputs
+          compression-level: 9
 
   test:
-    name: Test on ${{ matrix.api }}
+    name: Test on API ${{ matrix.api }}
     if: ${{ inputs.run_tests }}
     runs-on: ubuntu-latest
     needs: build
     strategy:
       fail-fast: false
       matrix:
-        api: [23, 26, 28, 29, 34]
+        api: [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]
 
     steps:
       - name: Check out
-        uses: deep-soft/checkout@v4
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: deep-soft/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
-
-      - name: Set up Python 3 (v5)
-        uses: deep-soft/setup-python@v5
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
       - name: Download build artifacts
-        uses: deep-soft/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ${{ github.sha }}
           path: out
 
-      - name: AVD test
+      - name: Enable KVM group perms
         run: |
-          # brew install coreutils bash
-          scripts/avd_test.sh ${{ matrix.api }}
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: AVD test
+        run: scripts/avd_test.sh ${{ matrix.api }}
