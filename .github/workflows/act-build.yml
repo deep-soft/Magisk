@@ -17,6 +17,8 @@ env:
   #  keyStorePassword: '${{ secrets.ANDROID_KEY_STORE_PASSWORD }}'
   #  keyPassword:      '${{ secrets.ANDROID_KEY_PASSWORD }}'
 
+  SCCACHE_DIRECT: false
+
 on:
 #  push:
 #    branches: [master]
@@ -52,7 +54,6 @@ on:
           type: boolean
           default: false
           required: true
-
 jobs:
   build:
     name: Build on ${{ matrix.os }}
