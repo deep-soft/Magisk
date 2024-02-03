@@ -82,9 +82,6 @@ jobs:
       - name: Build release
         run: ./build.py -vr all
 
-      - name: Stop gradle daemon
-        run: ./gradlew --stop
-
       - name: Copy apk to signed-apk
         shell: bash
         run: |
@@ -129,7 +126,16 @@ jobs:
           files: |
             ${{steps.sign-magisk.outputs.signedReleaseFile}}
 
+      - name: Build debug
+        if: ${{ inputs.run_tests }}
+        run: ./build.py -v all
+
+      - name: Stop gradle daemon
+        if: ${{ inputs.run_tests }}
+        run: ./gradlew --stop
+
       - name: Upload build artifact
+        if: ${{ inputs.run_tests }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}
@@ -137,6 +143,7 @@ jobs:
           compression-level: 9
 
       - name: Upload mapping and native debug symbols
+        if: ${{ inputs.run_tests }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.sha }}-symbols
