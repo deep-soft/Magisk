@@ -55,8 +55,13 @@ if is_windows:
 if not sys.version_info >= (3, 8):
     error("Requires Python 3.8+")
 
-if "ANDROID_SDK_ROOT" not in os.environ:
-    error("Please set Android SDK path to environment variable ANDROID_SDK_ROOT!")
+try:
+    sdk_path = Path(os.environ["ANDROID_HOME"])
+except KeyError:
+    try:
+        sdk_path = Path(os.environ["ANDROID_SDK_ROOT"])
+    except KeyError:
+        error("Please set Android SDK path to environment variable ANDROID_HOME")
 
 if shutil.which("sccache") is not None:
     os.environ["RUSTC_WRAPPER"] = "sccache"
@@ -68,18 +73,18 @@ if shutil.which("ccache") is not None:
 cpu_count = multiprocessing.cpu_count()
 os_name = platform.system().lower()
 
-archs = ["armeabi-v7a", "x86", "arm64-v8a", "x86_64"]
+archs = ["armeabi-v7a", "x86", "arm64-v8a", "x86_64", "riscv64"]
 triples = [
     "armv7a-linux-androideabi",
     "i686-linux-android",
     "aarch64-linux-android",
     "x86_64-linux-android",
+    "riscv64-linux-android",
 ]
-default_targets = ["magisk", "magiskinit", "magiskboot", "magiskpolicy", "busybox"]
+default_targets = ["magisk", "magiskinit", "magiskboot", "magiskpolicy"]
 support_targets = default_targets + ["resetprop"]
 rust_targets = ["magisk", "magiskinit", "magiskboot", "magiskpolicy"]
 
-sdk_path = Path(os.environ["ANDROID_SDK_ROOT"])
 ndk_root = sdk_path / "ndk"
 ndk_path = ndk_root / "magisk"
 ndk_build = ndk_path / "ndk-build"
@@ -245,7 +250,7 @@ def run_ndk_build(args, flags):
             mv(source, target)
 
 
-def run_cargo(cmds, triple="aarch64-linux-android"):
+def run_cargo(cmds):
     env = os.environ.copy()
     env["PATH"] = f'{rust_bin}{os.pathsep}{env["PATH"]}'
     env["CARGO_BUILD_RUSTC"] = str(rust_bin / f"rustc{EXE_EXT}")
@@ -286,7 +291,7 @@ def run_cargo_build(args):
 
         for target in targets:
             cmds[2] = target
-            proc = run_cargo(cmds, triple)
+            proc = run_cargo(cmds)
             if proc.returncode != 0:
                 error("Build binary failed!")
 
@@ -474,8 +479,10 @@ def build_apk(args, module):
 
     build_type = build_type.lower()
 
-    apk = f"{module}-{build_type}.apk"
-    source = Path(module, "build", "outputs", "apk", build_type, apk)
+    paths = module.split(":")
+
+    apk = f"{paths[-1]}-{build_type}.apk"
+    source = Path(*paths, "build", "outputs", "apk", build_type, apk)
     target = config["outdir"] / apk
     mv(source, target)
     header(f"Output: {target}")
@@ -483,20 +490,25 @@ def build_apk(args, module):
 
 def build_app(args):
     header("* Building the Magisk app")
-    build_apk(args, "app")
+    build_apk(args, ":app:apk")
+
+    build_type = "release" if args.release else "debug"
+
+    # Rename apk-variant.apk to app-variant.apk
+    source = config["outdir"] / f"apk-{build_type}.apk"
+    target = config["outdir"] / f"app-{build_type}.apk"
+    mv(source, target)
 
     # Stub building is directly integrated into the main app
     # build process. Copy the stub APK into output directory.
-    build_type = "release" if args.release else "debug"
-    apk = f"stub-{build_type}.apk"
-    source = Path("app", "src", build_type, "assets", "stub.apk")
-    target = config["outdir"] / apk
+    source = Path("app", "core", "src", build_type, "assets", "stub.apk")
+    target = config["outdir"] / f"stub-{build_type}.apk"
     cp(source, target)
 
 
 def build_stub(args):
     header("* Building the stub app")
-    build_apk(args, "stub")
+    build_apk(args, ":app:stub")
 
 
 def cleanup(args):
@@ -525,9 +537,16 @@ def cleanup(args):
 
     if "java" in args.target:
         header("* Cleaning java")
-        execv([gradlew, "app:clean", "app:shared:clean", "stub:clean"], env=find_jdk())
-        rm_rf(Path("app", "src", "debug"))
-        rm_rf(Path("app", "src", "release"))
+        execv(
+            [
+                gradlew,
+                ":app:apk:clean",
+                ":app:core:clean",
+                ":app:shared:clean",
+                ":app:stub:clean",
+            ],
+            env=find_jdk(),
+        )
 
 
 def setup_ndk(args):
@@ -551,6 +570,9 @@ def setup_ndk(args):
 
 def push_files(args, script):
     abi = cmd_out([adb_path, "shell", "getprop", "ro.product.cpu.abi"])
+    if not abi:
+        error("Cannot detect emulator ABI")
+
     apk = Path(
         config["outdir"], ("app-release.apk" if args.release else "app-debug.apk")
     )
@@ -587,45 +609,36 @@ def setup_avd(args):
         error("avd_magisk.sh failed!")
 
 
-def patch_avd_ramdisk(args):
+def patch_avd_file(args):
     if not args.skip:
         args.release = False
         build_all(args)
 
-    args.ramdisk = Path(args.ramdisk)
+    args.target = Path(args.target)
+    src_file = f"/data/local/tmp/{args.target.name}"
+    out_file = f"{src_file}.magisk"
+    if args.output:
+        args.output = Path(args.output)
+    else:
+        args.output = args.target.parent / f"{args.target.name}.magisk"
 
-    header("* Patching emulator ramdisk.img")
-
-    # Create a backup to prevent accidental overwrites
-    backup = args.ramdisk.parent / f"{args.ramdisk.name}.bak"
-    if not backup.exists():
-        cp(args.ramdisk, backup)
-
-    ini = args.ramdisk.parent / "advancedFeatures.ini"
-    with open(ini, "r") as f:
-        adv_ft = f.read()
-
-    # Need to turn off system as root
-    if "SystemAsRoot = on" in adv_ft:
-        # Create a backup
-        cp(ini, ini.parent / f"{ini.name}.bak")
-        adv_ft = adv_ft.replace("SystemAsRoot = on", "SystemAsRoot = off")
-        with open(ini, "w") as f:
-            f.write(adv_ft)
+    header(f"* Patching {args.target.name}")
 
     push_files(args, Path("scripts", "avd_patch.sh"))
 
-    proc = execv([adb_path, "push", backup, "/data/local/tmp/ramdisk.cpio.tmp"])
+    proc = execv([adb_path, "push", args.target, "/data/local/tmp"])
     if proc.returncode != 0:
         error("adb push failed!")
 
-    proc = execv([adb_path, "shell", "sh", "/data/local/tmp/avd_patch.sh"])
+    proc = execv([adb_path, "shell", "sh", "/data/local/tmp/avd_patch.sh", src_file])
     if proc.returncode != 0:
         error("avd_patch.sh failed!")
 
-    proc = execv([adb_path, "pull", "/data/local/tmp/ramdisk.cpio.gz", args.ramdisk])
+    proc = execv([adb_path, "pull", out_file, args.output])
     if proc.returncode != 0:
         error("adb pull failed!")
+
+    header(f"Output: {args.output}")
 
 
 def build_all(args):
@@ -707,12 +720,15 @@ avd_parser.add_argument(
 )
 avd_parser.set_defaults(func=setup_avd)
 
-avd_patch_parser = subparsers.add_parser("avd_patch", help="patch AVD ramdisk.img")
-avd_patch_parser.add_argument("ramdisk", help="path to ramdisk.img")
+avd_patch_parser = subparsers.add_parser(
+    "avd_patch", help="patch AVD ramdisk.img or init_boot.img"
+)
+avd_patch_parser.add_argument("target", help="path to ramdisk.img or init_boot.img")
+avd_patch_parser.add_argument("output", help="optional output file name", nargs="?")
 avd_patch_parser.add_argument(
     "-s", "--skip", action="store_true", help="skip building binaries and the app"
 )
-avd_patch_parser.set_defaults(func=patch_avd_ramdisk)
+avd_patch_parser.set_defaults(func=patch_avd_file)
 
 clean_parser = subparsers.add_parser("clean", help="cleanup")
 clean_parser.add_argument(
