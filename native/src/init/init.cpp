@@ -6,14 +6,18 @@
 #include <xz.h>
 
 #include <base.hpp>
-#include <embed.hpp>
 
 #include "init.hpp"
 
 using namespace std;
 
 #ifdef USE_CRT0
-__asm__(".global vfprintf \n vfprintf = tfp_vfprintf");
+__BEGIN_DECLS
+int tfp_vfprintf(FILE *stream, const char *format, va_list arg);
+int vfprintf(FILE *stream, const char *format, va_list arg) {
+    return tfp_vfprintf(stream, format, arg);
+}
+__END_DECLS
 #endif
 
 bool unxz(out_stream &strm, rust::Slice<const uint8_t> bytes) {

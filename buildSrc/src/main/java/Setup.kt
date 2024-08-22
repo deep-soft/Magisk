@@ -72,7 +72,7 @@ fun Project.setupCommon() {
         compileSdkVersion(34)
         buildToolsVersion = "34.0.0"
         ndkPath = "$sdkDirectory/ndk/magisk"
-        ndkVersion = "27.0.11902837"
+        ndkVersion = "27.0.12077973"
 
         defaultConfig {
             minSdk = 23
@@ -121,18 +121,20 @@ const val BUSYBOX_ZIP_CHECKSUM =
 fun Project.setupCoreLib() {
     setupCommon()
 
+    val abiList = Config.abiList
+
     val syncLibs by tasks.registering(Sync::class) {
         into("src/main/jniLibs")
-        for (abi in arrayOf("armeabi-v7a", "x86", "arm64-v8a", "x86_64", "riscv64")) {
+        for (abi in abiList) {
             into(abi) {
                 from(rootProject.file("native/out/$abi")) {
-                    include("magiskboot", "magiskinit", "magiskpolicy", "magisk")
-                    rename { "lib$it.so" }
+                    include("magiskboot", "magiskinit", "magiskpolicy", "magisk", "libinit-ld.so")
+                    rename { if (it.endsWith(".so")) it else "lib$it.so" }
                 }
             }
         }
         onlyIf {
-            if (inputs.sourceFiles.files.size != 20)
+            if (inputs.sourceFiles.files.size != abiList.size * 5)
                 throw StopExecutionException("Please build binaries first! (./build.py binary)")
             true
         }
@@ -158,6 +160,7 @@ fun Project.setupCoreLib() {
             }
         }
         from(zipTree(bb))
+        include(abiList.map { "$it/libbusybox.so" })
         into("src/main/jniLibs")
     }
 

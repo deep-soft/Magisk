@@ -43,7 +43,7 @@ fix_env() {
   # Cleanup and make dirs
   rm -rf $MAGISKBIN/*
   mkdir -p $MAGISKBIN 2>/dev/null
-  chmod 700 $NVBASE
+  chmod 700 /data/adb
   cp_readlink $1 $MAGISKBIN
   rm -rf $1
   chown -R 0:0 $MAGISKBIN
@@ -66,7 +66,6 @@ direct_install() {
   rm -f $1/new-boot.img
   fix_env $1
   run_migrations
-  copy_preinit_files
 
   return 0
 }
@@ -79,7 +78,7 @@ run_uninstaller() {
 }
 
 restore_imgs() {
-  [ -z $SHA1 ] && return 1
+  local SHA1=$(grep_prop SHA1 $MAGISKTMP/.magisk/config)
   local BACKUPDIR=/data/magisk_backup_$SHA1
   [ -d $BACKUPDIR ] || return 1
 
@@ -97,7 +96,7 @@ restore_imgs() {
 }
 
 post_ota() {
-  cd $NVBASE
+  cd /data/adb
   cp -f $1 bootctl
   rm -f $1
   chmod 755 bootctl
@@ -116,8 +115,8 @@ EOF
 
 add_hosts_module() {
   # Do not touch existing hosts module
-  [ -d $NVBASE/modules/hosts ] && return
-  cd $NVBASE/modules
+  [ -d /data/adb/modules/hosts ] && return
+  cd /data/adb/modules
   mkdir -p hosts/system/etc
   cat << EOF > hosts/module.prop
 id=hosts
@@ -232,8 +231,7 @@ app_init() {
   RAMDISKEXIST=false
   check_boot_ramdisk && RAMDISKEXIST=true
   get_flags >/dev/null
-  run_migrations
-  SHA1=$(grep_prop SHA1 $MAGISKTMP/.magisk/config)
+  run_migrations >/dev/null
   check_encryption
 
   # Dump variables
