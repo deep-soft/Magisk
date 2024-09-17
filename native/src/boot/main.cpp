@@ -48,7 +48,9 @@ Supported actions:
 
   repack [-n] <origbootimg> [outbootimg]
     Repack boot image components using files from the current directory
-    to [outbootimg], or 'new-boot.img' if not specified.
+    to [outbootimg], or 'new-boot.img' if not specified. Current directory
+    should only contain required files for [outbootimg], or incorrect
+    [outbootimg] may be produced.
     <origbootimg> is the original boot image used to unpack the components.
     By default, each component will be automatically compressed using its
     corresponding format detected in <origbootimg>. If a component file
@@ -150,6 +152,8 @@ int main(int argc, char *argv[]) {
         unlink(EXTRA_FILE);
         unlink(RECV_DTBO_FILE);
         unlink(DTB_FILE);
+        unlink(BOOTCONFIG_FILE);
+        rm_rf(VND_RAMDISK_DIR);
     } else if (argc > 2 && action == "sha1") {
         uint8_t sha1[20];
         {

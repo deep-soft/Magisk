@@ -54,6 +54,7 @@ A Magisk module is a folder placed in `/data/adb/modules` with the structure bel
 │   ├── post-fs-data.sh     <--- This script will be executed in post-fs-data
 │   ├── service.sh          <--- This script will be executed in late_start service
 |   ├── uninstall.sh        <--- This script will be executed when Magisk removes your module
+|   ├── action.sh           <--- This script will be executed when user click the action button in Magisk app
 │   ├── system.prop         <--- Properties in this file will be loaded as system properties by resetprop
 │   ├── sepolicy.rule       <--- Additional custom sepolicy rules
 │   │
@@ -231,7 +232,7 @@ The list above will result in the following files being created: `$MODPATH/syste
 In Magisk, you can run boot scripts in 2 different modes: **post-fs-data** and **late_start service** mode.
 
 - post-fs-data mode
-  - This stage is BLOCKING. The boot process is paused before execution is done, or 10 seconds have passed.
+  - This stage is BLOCKING. The boot process is paused before execution is done, or 40 seconds have passed.
   - Scripts run before any modules are mounted. This allows a module developer to dynamically adjust their modules before it gets mounted.
   - This stage happens before Zygote is started, which pretty much means everything in Android
   - **WARNING:** using `setprop` will deadlock the boot process! Please use `resetprop -n <prop_name> <prop_value>` instead.

@@ -189,6 +189,15 @@ printvar() {
   eval echo $1=\$$1
 }
 
+run_action() {
+  local MODID="$1"
+  cd "/data/adb/modules/$MODID"
+  sh ./action.sh
+  local RES=$?
+  cd /
+  return $RES
+}
+
 ##########################
 # Non-root util_functions
 ##########################
