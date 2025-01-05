@@ -17,7 +17,6 @@ import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
-import org.gradle.api.Task
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Copy
@@ -75,7 +74,7 @@ fun Project.setupCommon() {
         compileSdkVersion(35)
         buildToolsVersion = "34.0.0"
         ndkPath = "$sdkDirectory/ndk/magisk"
-        ndkVersion = "27.0.12077973"
+        ndkVersion = "28.0.12674087"
 
         defaultConfig {
             minSdk = 23
@@ -300,6 +299,9 @@ fun Project.setupAppCommon() {
 
         defaultConfig {
             targetSdk = 35
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt")
+            )
         }
 
         buildTypes {
