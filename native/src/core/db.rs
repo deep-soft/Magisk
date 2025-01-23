@@ -25,14 +25,14 @@ fn sqlite_err_str(code: i32) -> &'static Utf8CStr {
 #[error("sqlite3: {}", sqlite_err_str(self.0))]
 pub struct SqliteError(i32);
 
-pub type SqliteResult = Result<(), SqliteError>;
+pub type SqliteResult<T> = Result<T, SqliteError>;
 
-trait SqliteReturn {
-    fn sql_result(self) -> SqliteResult;
+pub trait SqliteReturn {
+    fn sql_result(self) -> SqliteResult<()>;
 }
 
 impl SqliteReturn for i32 {
-    fn sql_result(self) -> SqliteResult {
+    fn sql_result(self) -> SqliteResult<()> {
         if self != 0 {
             Err(SqliteError(self))
         } else {
@@ -41,7 +41,7 @@ impl SqliteReturn for i32 {
     }
 }
 
-trait SqlTable {
+pub trait SqlTable {
     fn on_row(&mut self, columns: &[String], values: &DbValues);
 }
 
@@ -132,7 +132,7 @@ extern "C" {
     ) -> i32;
 }
 
-enum DbArg<'a> {
+pub enum DbArg<'a> {
     Text(&'a str),
     Integer(i64),
 }
@@ -146,6 +146,7 @@ unsafe extern "C" fn bind_arguments(v: *mut c_void, idx: i32, stmt: Pin<&mut DbS
     let args = &mut *(v as *mut DbArgs<'_>);
     if args.curr < args.args.len() {
         let arg = &args.args[args.curr];
+        args.curr += 1;
         match *arg {
             Text(v) => stmt.bind_text(idx, v),
             Integer(v) => stmt.bind_int64(idx, v),
@@ -178,7 +179,13 @@ impl MagiskD {
         }
     }
 
-    fn db_exec_with_output<T: SqlTable>(&self, sql: &str, args: &[DbArg], out: &mut T) -> i32 {
+    fn db_exec_impl(
+        &self,
+        sql: &str,
+        args: &[DbArg],
+        exec_callback: SqlExecCallback,
+        exec_cookie: *mut c_void,
+    ) -> i32 {
         let mut bind_callback: SqlBindCallback = None;
         let mut bind_cookie: *mut c_void = ptr::null_mut();
         let mut db_args = DbArgs { args, curr: 0 };
@@ -186,35 +193,32 @@ impl MagiskD {
             bind_callback = Some(bind_arguments);
             bind_cookie = (&mut db_args) as *mut DbArgs as *mut c_void;
         }
-        let out_ptr: *mut T = out;
-
         self.with_db(|db| unsafe {
             sql_exec_impl(
                 db,
                 sql,
                 bind_callback,
                 bind_cookie,
-                Some(read_db_row::<T>),
-                out_ptr.cast(),
+                exec_callback,
+                exec_cookie,
             )
         })
     }
 
-    fn db_exec(&self, sql: &str, args: &[DbArg]) -> i32 {
-        let mut bind_callback: SqlBindCallback = None;
-        let mut bind_cookie: *mut c_void = ptr::null_mut();
-        let mut db_args = DbArgs { args, curr: 0 };
-        if !args.is_empty() {
-            bind_callback = Some(bind_arguments);
-            bind_cookie = (&mut db_args) as *mut DbArgs as *mut c_void;
-        }
-
-        self.with_db(|db| unsafe {
-            sql_exec_impl(db, sql, bind_callback, bind_cookie, None, ptr::null_mut())
-        })
+    pub fn db_exec_with_rows<T: SqlTable>(&self, sql: &str, args: &[DbArg], out: &mut T) -> i32 {
+        self.db_exec_impl(
+            sql,
+            args,
+            Some(read_db_row::<T>),
+            out as *mut T as *mut c_void,
+        )
     }
 
-    pub fn set_db_setting(&self, key: DbEntryKey, value: i32) -> SqliteResult {
+    pub fn db_exec(&self, sql: &str, args: &[DbArg]) -> i32 {
+        self.db_exec_impl(sql, args, None, ptr::null_mut())
+    }
+
+    pub fn set_db_setting(&self, key: DbEntryKey, value: i32) -> SqliteResult<()> {
         self.db_exec(
             "INSERT OR REPLACE INTO settings (key,value) VALUES(?,?)",
             &[Text(key.to_str()), Integer(value as i64)],
@@ -229,14 +233,14 @@ impl MagiskD {
             DbEntryKey::SuMultiuserMode => MultiuserMode::default().repr,
             DbEntryKey::SuMntNs => MntNsMode::default().repr,
             DbEntryKey::DenylistConfig => 0,
-            DbEntryKey::ZygiskConfig => self.is_emulator() as i32,
+            DbEntryKey::ZygiskConfig => self.is_emulator as i32,
             DbEntryKey::BootloopCount => 0,
             _ => -1,
         };
         let mut func = |_: &[String], values: &DbValues| {
             val = values.get_int(0);
         };
-        self.db_exec_with_output(
+        self.db_exec_with_rows(
             "SELECT value FROM settings WHERE key=?",
             &[Text(key.to_str())],
             &mut func,
@@ -247,10 +251,14 @@ impl MagiskD {
         val
     }
 
-    pub fn get_db_settings(&self, cfg: &mut DbSettings) -> SqliteResult {
-        cfg.zygisk = self.is_emulator();
-        self.db_exec_with_output("SELECT * FROM settings", &[], cfg)
-            .sql_result()
+    pub fn get_db_settings(&self) -> SqliteResult<DbSettings> {
+        let mut cfg = DbSettings {
+            zygisk: self.is_emulator,
+            ..Default::default()
+        };
+        self.db_exec_with_rows("SELECT * FROM settings", &[], &mut cfg)
+            .sql_result()?;
+        Ok(cfg)
     }
 
     pub fn get_db_string(&self, key: DbEntryKey) -> String {
@@ -258,7 +266,7 @@ impl MagiskD {
         let mut func = |_: &[String], values: &DbValues| {
             val.push_str(values.get_text(0));
         };
-        self.db_exec_with_output(
+        self.db_exec_with_rows(
             "SELECT value FROM strings WHERE key=?",
             &[Text(key.to_str())],
             &mut func,
@@ -269,7 +277,7 @@ impl MagiskD {
         val
     }
 
-    pub fn rm_db_string(&self, key: DbEntryKey) -> SqliteResult {
+    pub fn rm_db_string(&self, key: DbEntryKey) -> SqliteResult<()> {
         self.db_exec("DELETE FROM strings WHERE key=?", &[Text(key.to_str())])
             .sql_result()
     }
@@ -291,22 +299,22 @@ impl MagiskD {
             }
             writer.ipc_write_string(&out).log().ok();
         };
-        self.db_exec_with_output(&sql, &[], &mut output_fn);
+        self.db_exec_with_rows(&sql, &[], &mut output_fn);
         writer.ipc_write_string("").log()
     }
 }
 
 impl MagiskD {
     pub fn get_db_settings_for_cxx(&self, cfg: &mut DbSettings) -> bool {
-        self.get_db_settings(cfg).log().is_ok()
+        cfg.zygisk = self.is_emulator;
+        self.db_exec_with_rows("SELECT * FROM settings", &[], cfg)
+            .sql_result()
+            .log()
+            .is_ok()
     }
 
     pub fn set_db_setting_for_cxx(&self, key: DbEntryKey, value: i32) -> bool {
         self.set_db_setting(key, value).log().is_ok()
-    }
-
-    pub fn rm_db_string_for_cxx(&self, key: DbEntryKey) -> bool {
-        self.rm_db_string(key).log().is_ok()
     }
 
     pub fn db_exec_for_cxx(&self, client_fd: RawFd) {
